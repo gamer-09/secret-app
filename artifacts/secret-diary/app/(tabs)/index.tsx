@@ -203,8 +203,10 @@ function RuledLines({ areaH }: { areaH: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <View
           key={i}
-          pointerEvents="none"
-          style={[styles.ruledLine, { top: (i + 1) * LINE_HEIGHT - 1 }]}
+          style={[
+            styles.ruledLine,
+            { top: (i + 1) * LINE_HEIGHT - 1, pointerEvents: "none" },
+          ]}
         />
       ))}
     </>
@@ -240,13 +242,21 @@ function DiaryBook() {
 
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  // Refs to always hold the latest callbacks so the PanResponder (created
+  // once via useRef) never holds stale closures.
+  const handleNextRef = useRef<() => void>(() => {});
+  const handlePrevRef = useRef<() => void>(() => {});
+
   const animateTurn = useCallback(
     (dir: "next" | "prev", callback: () => void) => {
       const out = dir === "next" ? -SW : SW;
+      // useNativeDriver must be false here because we call setValue() directly
+      // during the pan gesture — mixing setValue() with useNativeDriver: true
+      // crashes on New Architecture (Fabric).
       Animated.timing(slideAnim, {
         toValue: out,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => {
         callback();
         slideAnim.setValue(-out * 0.3);
@@ -254,7 +264,7 @@ function DiaryBook() {
           toValue: 0,
           tension: 120,
           friction: 14,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start();
       });
     },
@@ -275,6 +285,10 @@ function DiaryBook() {
     }
   }, [currentPageIndex, animateTurn, goToPrevPage]);
 
+  // Keep refs in sync with latest handlers on every render.
+  handleNextRef.current = handleNext;
+  handlePrevRef.current = handlePrev;
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) =>
@@ -284,20 +298,20 @@ function DiaryBook() {
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dx < -55) {
-          handleNext();
+          handleNextRef.current();
         } else if (gs.dx > 55) {
-          handlePrev();
+          handlePrevRef.current();
         } else {
           Animated.spring(slideAnim, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start();
         }
       },
       onPanResponderTerminate: () => {
         Animated.spring(slideAnim, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start();
       },
     })
@@ -309,7 +323,7 @@ function DiaryBook() {
     Animated.timing(slideAnim, {
       toValue: out,
       duration: 180,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start(() => {
       addPage();
       slideAnim.setValue(SW * 0.3);
@@ -317,7 +331,7 @@ function DiaryBook() {
         toValue: 0,
         tension: 120,
         friction: 14,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     });
   };
@@ -368,18 +382,17 @@ function DiaryBook() {
       >
         {/* Drop shadow behind page */}
         <View
-          pointerEvents="none"
-          style={[styles.pageShadowEl, { height: PAGE_H }]}
+          style={[styles.pageShadowEl, { height: PAGE_H, pointerEvents: "none" }]}
         />
 
         <View style={[styles.page, { height: PAGE_H }]}>
           {/* Ruled lines layer */}
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
             <RuledLines areaH={PAGE_H} />
           </View>
 
           {/* Left margin line */}
-          <View style={styles.marginLine} pointerEvents="none" />
+          <View style={[styles.marginLine, { pointerEvents: "none" }]} />
 
           {/* Date row */}
           <Text style={[styles.pageDate, { height: DATE_ROW_H }]} numberOfLines={1}>
@@ -388,8 +401,7 @@ function DiaryBook() {
 
           {/* Writing TextInput — no scroll, fits the page */}
           <View
-            style={[styles.textContainer, { height: TEXT_H }]}
-            pointerEvents="box-none"
+            style={[styles.textContainer, { height: TEXT_H, pointerEvents: "box-none" }]}
           >
             <TextInput
               style={[
