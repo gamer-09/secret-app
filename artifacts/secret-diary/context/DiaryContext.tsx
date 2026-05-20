@@ -30,6 +30,7 @@ interface DiaryContextValue {
   lock: () => void;
   updateCurrentPage: (content: string) => void;
   addPage: () => void;
+  deletePage: (index: number) => void;
   importFromText: (text: string) => void;
   goToNextPage: () => void;
   goToPrevPage: () => void;
@@ -154,10 +155,25 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addPage = useCallback(() => {
-    // Capture new index BEFORE state update (new page will be at pages.length)
     setCurrentPageIndex(pages.length);
     setPages((prev) => [...prev, newPage()]);
   }, [pages.length]);
+
+  const deletePage = useCallback(
+    (index: number) => {
+      setPages((prev) => {
+        const next = prev.filter((_, i) => i !== index);
+        // Always keep at least one page
+        return next.length > 0 ? next : [newPage()];
+      });
+      setCurrentPageIndex((prev) => {
+        if (index < prev) return prev - 1;
+        if (index === prev) return Math.max(0, index - 1);
+        return prev;
+      });
+    },
+    []
+  );
 
   const importFromText = useCallback(
     (text: string) => {
@@ -202,6 +218,7 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
         lock,
         updateCurrentPage,
         addPage,
+        deletePage,
         importFromText,
         goToNextPage,
         goToPrevPage,

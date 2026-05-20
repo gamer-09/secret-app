@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   FlatList,
@@ -151,7 +152,7 @@ function LockScreen() {
 
 function HomeScreen() {
   const {
-    pages, goToPage, setView, addPage, importFromText,
+    pages, goToPage, setView, addPage, deletePage, importFromText,
     lock, hasPassword,
   } = useDiary();
   const insets = useSafeAreaInsets();
@@ -169,6 +170,24 @@ function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     addPage();
     setView("diary");
+  };
+
+  const handleDelete = (index: number) => {
+    Alert.alert(
+      "Delete entry?",
+      "This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            deletePage(index);
+          },
+        },
+      ]
+    );
   };
 
   const handleImport = async () => {
@@ -196,20 +215,30 @@ function HomeScreen() {
   const renderEntry = ({ item, index }: { item: DiaryPage; index: number }) => {
     const preview = item.content.trim().slice(0, 90).replace(/\n/g, " ") || "Empty page…";
     return (
-      <TouchableOpacity
-        style={styles.entryCard}
-        onPress={() => handleOpenPage(index)}
-        activeOpacity={0.75}
-      >
-        <View style={styles.entryCardLeft}>
-          <Text style={styles.entryNum}>{index + 1}</Text>
-        </View>
-        <View style={styles.entryCardBody}>
-          <Text style={styles.entryDate}>{formatShortDate(item.createdAt)}</Text>
-          <Text style={styles.entryPreview} numberOfLines={2}>{preview}</Text>
-        </View>
-        <Feather name="chevron-right" size={18} color={c.mutedForeground} />
-      </TouchableOpacity>
+      <View style={styles.entryRow}>
+        <TouchableOpacity
+          style={styles.entryCard}
+          onPress={() => handleOpenPage(index)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.entryCardLeft}>
+            <Text style={styles.entryNum}>{index + 1}</Text>
+          </View>
+          <View style={styles.entryCardBody}>
+            <Text style={styles.entryDate}>{formatShortDate(item.createdAt)}</Text>
+            <Text style={styles.entryPreview} numberOfLines={2}>{preview}</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={c.mutedForeground} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => handleDelete(index)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
+        >
+          <Feather name="trash-2" size={16} color={c.destructive} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -522,13 +551,22 @@ const styles = StyleSheet.create({
   },
   homeDivider: { height: 1, backgroundColor: c.border, marginHorizontal: 18, opacity: 0.6 },
   listContent: { paddingTop: 8, paddingHorizontal: 16 },
+  entryRow: {
+    flexDirection: "row", alignItems: "center",
+  },
   entryCard: {
+    flex: 1,
     flexDirection: "row", alignItems: "center",
     backgroundColor: c.page, borderRadius: 3,
     paddingVertical: 14, paddingHorizontal: 14,
     borderWidth: 0.5, borderColor: c.border,
     shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 2, elevation: 1,
+  },
+  deleteBtn: {
+    width: 40, height: 40,
+    alignItems: "center", justifyContent: "center",
+    marginLeft: 8,
   },
   entryCardLeft: {
     width: 32, alignItems: "center", marginRight: 12,
@@ -547,23 +585,26 @@ const styles = StyleSheet.create({
     color: c.mutedForeground, lineHeight: 18,
   },
   separator: { height: 6 },
-  emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 12 },
+  emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 80 },
   emptyText: {
     fontFamily: "Lora_400Regular", fontSize: 15,
-    color: c.mutedForeground, letterSpacing: 0.5,
+    color: c.mutedForeground, letterSpacing: 0.5, marginTop: 12,
   },
   fabContainer: {
     position: "absolute", left: 0, right: 0, alignItems: "center",
   },
   fab: {
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flexDirection: "row", alignItems: "center",
     backgroundColor: c.primary,
     paddingVertical: 14, paddingHorizontal: 28,
     borderRadius: 28,
     shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2, shadowRadius: 6, elevation: 5,
   },
-  fabLabel: { fontFamily: "Lora_700Bold", fontSize: 14, color: c.primaryForeground, letterSpacing: 0.5 },
+  fabLabel: {
+    fontFamily: "Lora_700Bold", fontSize: 14,
+    color: c.primaryForeground, letterSpacing: 0.5, marginLeft: 8,
+  },
 
   // Shared header
   headerBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
