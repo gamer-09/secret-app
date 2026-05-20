@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "uaINbuzWmgnaOXLet3eg7"
+uri = "file://artifacts/secret-diary/assets/images/icon.png"
+type = "image"
+title = "secret diary leather book icon"
