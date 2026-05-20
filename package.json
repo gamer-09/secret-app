@@ -10,7 +10,13 @@
   },
   "private": true,
   "devDependencies": {
+    "@types/react": "~19.2.10",
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "expo": "^55.0.25",
+    "react": "19.2.0",
+    "react-native": "0.83.6"
   }
 }
