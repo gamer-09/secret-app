@@ -1,8 +1,13 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "uaINbuzWmgnaOXLet3eg7"
 uri = "file://artifacts/secret-diary/assets/images/icon.png"
 type = "image"
 title = "secret diary leather book icon"
+
+[[outputs]]
+id = "M2etLw5STum15vsXuUzn4"
+uri = "file://qr-expo.png"
+type = "image"
+title = "Scan with Expo Go"
