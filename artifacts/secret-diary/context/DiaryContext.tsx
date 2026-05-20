@@ -13,6 +13,8 @@ export interface DiaryPage {
   createdAt: string;
 }
 
+export type DiaryView = "home" | "diary";
+
 interface DiaryContextValue {
   isLocked: boolean;
   hasPassword: boolean;
@@ -21,11 +23,14 @@ interface DiaryContextValue {
   currentPage: DiaryPage | null;
   totalPages: number;
   isLoading: boolean;
+  view: DiaryView;
+  setView: (v: DiaryView) => void;
   unlock: (password: string) => boolean;
   setupPassword: (password: string) => Promise<void>;
   lock: () => void;
   updateCurrentPage: (content: string) => void;
   addPage: () => void;
+  importFromText: (text: string) => void;
   goToNextPage: () => void;
   goToPrevPage: () => void;
   goToPage: (index: number) => void;
@@ -35,17 +40,38 @@ const DiaryContext = createContext<DiaryContextValue | null>(null);
 
 const PASSWORD_KEY = "diary_secret_password";
 const PAGES_KEY = "diary_pages_v1";
+export const PAGE_MAX_CHARS = 680;
 
 function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
-function newPage(): DiaryPage {
+function newPage(content = ""): DiaryPage {
   return {
     id: generateId(),
-    content: "",
+    content,
     createdAt: new Date().toISOString(),
   };
+}
+
+// Split a long text into page-sized chunks, breaking on word boundaries.
+function splitIntoPages(text: string): DiaryPage[] {
+  const chunks: string[] = [];
+  let remaining = text.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  while (remaining.length > 0) {
+    if (remaining.length <= PAGE_MAX_CHARS) {
+      chunks.push(remaining);
+      break;
+    }
+    let splitAt = PAGE_MAX_CHARS;
+    const lastNewline = remaining.lastIndexOf("\n", PAGE_MAX_CHARS);
+    const lastSpace = remaining.lastIndexOf(" ", PAGE_MAX_CHARS);
+    const best = Math.max(lastNewline, lastSpace);
+    if (best > 0) splitAt = best;
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+  return chunks.map((c) => newPage(c));
 }
 
 export function DiaryProvider({ children }: { children: React.ReactNode }) {
@@ -55,7 +81,9 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
   const [pages, setPages] = useState<DiaryPage[]>([newPage()]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [view, setView] = useState<DiaryView>("home");
 
+  // ── Load persisted data ──────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
@@ -63,18 +91,15 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
         if (pwd) {
           setStoredPassword(pwd);
           setHasPassword(true);
-          // isLocked stays true → user must enter password
         } else {
           setHasPassword(false);
-          // isLocked stays true → user will see the "create password" screen
         }
-
         const raw = await AsyncStorage.getItem(PAGES_KEY);
         if (raw) {
           const parsed: DiaryPage[] = JSON.parse(raw);
           if (parsed.length > 0) {
             setPages(parsed);
-            setCurrentPageIndex(parsed.length - 1);
+            setCurrentPageIndex(0);
           }
         }
       } catch {
@@ -85,19 +110,17 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
     load();
   }, []);
 
-  const savePages = useCallback(async (updated: DiaryPage[]) => {
-    try {
-      await AsyncStorage.setItem(PAGES_KEY, JSON.stringify(updated));
-    } catch {}
-  }, []);
+  // ── Auto-save pages whenever they change ─────────────────────────────────
+  useEffect(() => {
+    if (!isLoading) {
+      AsyncStorage.setItem(PAGES_KEY, JSON.stringify(pages)).catch(() => {});
+    }
+  }, [pages, isLoading]);
 
+  // ── Auth ─────────────────────────────────────────────────────────────────
   const unlock = useCallback(
     (password: string): boolean => {
-      if (!hasPassword) {
-        setIsLocked(false);
-        return true;
-      }
-      if (password === storedPassword) {
+      if (!hasPassword || password === storedPassword) {
         setIsLocked(false);
         return true;
       }
@@ -116,30 +139,36 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
   const lock = useCallback(() => {
     if (hasPassword) {
       setIsLocked(true);
+      setView("home");
     }
   }, [hasPassword]);
 
+  // ── Page operations ──────────────────────────────────────────────────────
   const updateCurrentPage = useCallback(
     (content: string) => {
-      setPages((prev) => {
-        const updated = prev.map((p, i) =>
-          i === currentPageIndex ? { ...p, content } : p
-        );
-        savePages(updated);
-        return updated;
-      });
+      setPages((prev) =>
+        prev.map((p, i) => (i === currentPageIndex ? { ...p, content } : p))
+      );
     },
-    [currentPageIndex, savePages]
+    [currentPageIndex]
   );
 
   const addPage = useCallback(() => {
-    setPages((prev) => {
-      const updated = [...prev, newPage()];
-      savePages(updated);
-      setCurrentPageIndex(updated.length - 1);
-      return updated;
-    });
-  }, [savePages]);
+    // Capture new index BEFORE state update (new page will be at pages.length)
+    setCurrentPageIndex(pages.length);
+    setPages((prev) => [...prev, newPage()]);
+  }, [pages.length]);
+
+  const importFromText = useCallback(
+    (text: string) => {
+      const imported = splitIntoPages(text);
+      const insertAt = pages.length;
+      setCurrentPageIndex(insertAt);
+      setPages((prev) => [...prev, ...imported]);
+      setView("diary");
+    },
+    [pages.length]
+  );
 
   const goToNextPage = useCallback(() => {
     setCurrentPageIndex((prev) => Math.min(prev + 1, pages.length - 1));
@@ -151,13 +180,10 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
 
   const goToPage = useCallback(
     (index: number) => {
-      const clamped = Math.max(0, Math.min(index, pages.length - 1));
-      setCurrentPageIndex(clamped);
+      setCurrentPageIndex(Math.max(0, Math.min(index, pages.length - 1)));
     },
     [pages.length]
   );
-
-  const currentPage = pages[currentPageIndex] ?? null;
 
   return (
     <DiaryContext.Provider
@@ -166,14 +192,17 @@ export function DiaryProvider({ children }: { children: React.ReactNode }) {
         hasPassword,
         pages,
         currentPageIndex,
-        currentPage,
+        currentPage: pages[currentPageIndex] ?? null,
         totalPages: pages.length,
         isLoading,
+        view,
+        setView,
         unlock,
         setupPassword,
         lock,
         updateCurrentPage,
         addPage,
+        importFromText,
         goToNextPage,
         goToPrevPage,
         goToPage,

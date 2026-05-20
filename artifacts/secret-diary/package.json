@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/lora": "^0.4.2",
+    "expo-document-picker": "^55.0.13",
     "expo-secure-store": "^15.0.8"
   }
 }
